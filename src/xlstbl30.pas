@@ -1,43 +1,22 @@
-unit xlstbl31;
-{
-Index (0-based) Format string
-0 General
-1 0
-2 0.00
-3 #,##0
-4 ($#,##0_);($#,##0)
-5 ($#,##0_);[Red]($#,##0)
-6 ($#,##0.00_);($#,##0.00)
-7 ($#,##0.00_);[Red]($#,##0.00)
-8 0%
-9 0.00%
-10 0.00E+00
-11 # ?/?
-12 # ??/??
-13 m/d/yy
-14 d-mmm-yy
-15 d-mmm
-16 mmm-yy
-17 h:mm AM/PM
-18 h:mm:ss AM/PM
-19 h:mm
-20 h:mm:ss
-21 m/d/yy h:mm
-22 _($* #,##0_);_($* (#,##0);_($* "-"_);_(@_)
-23 _(* #,##0_);_(* (#,##0);_(* "-"_);_(@_)
-24 _($* #,##0.00_);_($* (#,##0.00);_($* "-"??_);_(@_)
-25 _(* #,##0.00_);_(* (#,##0.00);_(* "-"??_);_(@_)
-26 #,##0.00
-27 (#,##0_);(#,##0)
-28 (#,##0_);[Red](#,##0)
-29 (#,##0.00_);(#,##0.00)
-30 (#,##0.00_);[Red](#,##0.00)
-31 mm:ss
-32 [h]:mm:ss
-33 mm:ss.0
-34 ##0.0E+0
-35 @
-}
+(*
+Copyright (C) 2018, Sridharan S
+
+This file is part of xltbl (Table interface for Excel Worksheet).
+
+xlstbl is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+xltbl is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License version 3
+ along with Table interface for Excel Worksheet  If not, see <http://www.gnu.org/licenses/>.
+*)
+unit xlstbl3;
 {$DEFINE SM }
 {$IFNDEF SM }
 {$DEFINE LIBXL }
@@ -57,8 +36,6 @@ uses
   bjXml3_1,
   Variants,
   StrUtils,
-  IniFiles,
- VchLib,
   Dialogs;
 
 {$IFDEF LibXL }
@@ -67,53 +44,11 @@ type
 {$ENDIF }
 
 type
-(*
-  IDataset = interface(IInterface)
-    ['{FB7722CC-62D4-4400-B93A-AAA4401246BD}']
-    function GetFields: IDataFields; stdcall;
-    function GetHead: IDatasetHead; stdcall;
-    function GetRecordCount: Integer; stdcall;
-    function GetValues: IDataValues; stdcall;
-    function IsEmpty:Boolean;
-    procedure First;
-    procedure Last;
-    procedure Next;
-    procedure Prior;
-    procedure Append;
-    procedure Post;
-    procedure Edit;
-    procedure Open;
-    procedure Close;
-    procedure Clear;
-    function Locate(const KeyFields: string; const KeyValues: Variant):Boolean; stdcall;
-    function CopyData(const ASource:IDataset): HResult; stdcall;
-    function CopyHead(const ASource:IDatasetHead): HResult; stdcall;
-    function GetActive: Boolean;
-    function GetBof: Boolean;
-    function GetEof: Boolean;
-    function RecordState: TMemStarUpdateStatus; stdcall;
-    procedure ClearState;
-    function GetEditState: Boolean; stdcall;
-    procedure ReplaceValue(const AFieldName:string; AOldVal, ARepVal:Variant);
-        stdcall;
-    procedure SetActive(Value: Boolean);
-    procedure SetEditState(const Value: Boolean); stdcall;
-    property Active: Boolean read GetActive write SetActive;
-    property Bof: Boolean read GetBof;
-    property EditState: Boolean read GetEditState write SetEditState;
-    property Eof: Boolean read GetEof;
-    property Fields: IDataFields read GetFields;
-    property Head: IDatasetHead read GetHead;
-    property RecordCount: Integer read GetRecordCount;
-    property Values: IDataValues read GetValues;
-  end;
-*)
 
   TbjXLSTable = class(TInterfacedObject)
   private
     FO_Row: integer;
     FO_Column: integer;
-{    FMaxRow: integer; }
     FxLSFileName: string;
     FSheetName: string;
     FToSaveFile: boolean;
@@ -121,7 +56,7 @@ type
     FPageLen: integer;
     FLastRow:  integer;
   protected
-    function IsEmpty(aRow: integer = -1): boolean;
+    function IsEmpty(aRow: integer = 0): boolean;
     function GetFieldCol(const aName: string): integer;
     function GetLastRow: integer;
   public
@@ -143,21 +78,17 @@ type
     SkipCount: integer;
     FieldList: TStringList;
     ColumnList: array of integer;
-    IDList: TStringList;
     procedure SetXLSFile(const aName: string);
     procedure NewFile(const aName: string);
     procedure SetSheet(const aSheet: string);
     procedure Close;
     procedure SetOrigin(const aRow, aColumn: integer);
-    function GetFieldVal(const aField: string; aRow: integer = -1): variant;
-//    function GetFieldFmla(const aField: string): string;
-//    function GetFieldStr(const aField: string): string;
+    function GetFieldVal(const aField: string; aRow: integer = 0): variant;
     function GetFieldCurr(const aField: string): currency;
     function GetFieldFloat(const aField: string): double;
     function GetFieldString(const aField: string): string;
     function GetFieldSDate(const aField: string): string;
     function GetFieldToken(const aField: string): string;
-//    procedure SetFieldType(const aField: string; const aType: integer);
 {$IFDEF SM }
     function GetFieldObj(const aField: string): TColumn;
     function GetCellObj(const arow: integer; const aField: string): TCell; overload;
@@ -174,7 +105,7 @@ type
     procedure SetFields(const aList: TStrings; const ToWrite: boolean);
     function GetFields(const aList: TStrings): Tstrings;
     procedure ParseXml(const aNode: IbjXml; const FldLst: TStringList);
-    function IsEmptyField(const aField: string; aRow: integer = -1): boolean;
+    function IsEmptyField(const aField: string; aRow: integer = 0): boolean;
     procedure Insert;
     procedure Delete;
     procedure ClearRow;
@@ -190,12 +121,10 @@ type
 
     property O_Row: integer read FO_row;
     property O_Column: integer read FO_Column;
-{    property MaxRow: integer read FMaxRow write FMaxRow; }
     property XLSFileName: string write SetXLSFile;
     property ToSaveFile: boolean read FToSaveFile write FToSaveFile;
     property SheetName: string write SetSheet;
     property Owner: boolean read Fowner write Fowner;
-//    property FieldVal[aField: string]: variant read GetVal write SetVal;
     property PageLen: integer read FPageLen write FPagelen;
     property LastRow: integer read GetLastRow;
   end;
@@ -210,9 +139,7 @@ begin
   FO_Column  := 0;
 }
   FToSaveFile := False;
-  FieldList := THashedStringList.Create;
-  IDList := THashedStringList.Create;
-{  FMaxRow := -1; }
+  FieldList := TStringList.Create;
   SkipCount := 1;
   FLastRow := -1;
 end;
@@ -221,8 +148,6 @@ destructor TbjXLSTable.Destroy;
 begin
   FieldList.Clear;
   FieldList.Free;
-  if Assigned(IDList) then
-  IDList.Free;
 if Owner then
 begin
 {$IFDEF SM }
@@ -275,7 +200,6 @@ begin
   if FileExists(FXLSFileName) then
     XL.OpenFile(FXLSFileName);
   Workbook := XL.Workbook;
-//  WorkSheet := Workbook.Sheets[0];
 {$ENDIF SM }
 {$IFDEF LIBXL }
   FXLSFileName := aName;
@@ -284,7 +208,6 @@ begin
   Workbook.setKey('Sri', 'windows-21212c060ecde40e64bf6569abo5p2h2');
   if FileExists(aName) then
     Workbook.load(pChar(aName));
-//  WorkSheet := Workbook.getSheet(0);
 {$ENDIF LIBXL}
 end;
 
@@ -345,7 +268,7 @@ begin
   FO_Column :=aColumn;
 end;
 
-function TbjXLSTable.GetFieldVal(const aField: string; aRow: integer = -1): variant;
+function TbjXLSTable.GetFieldVal(const aField: string; aRow: integer = 0): variant;
 {$IFDEF LIBXL }
 var
   wCellType: CellType;
@@ -357,17 +280,14 @@ begin
     raise Exception.Create(aField + ' Column not defined');
     Exit;
   end;
-  if aRow = -1 then
+  if aRow = 0 then
     aRow := Currentrow;
 {$IFDEF SM }
-//  Result := WorkSheet.Cells[FO_row + CurrentRow, FO_Column + GetFieldCol(aField)].Value;
   Result := WorkSheet.Cells[FO_row + aRow, FO_Column + GetFieldCol(aField)].Value;
-//  Result := Encode(WorkSheet.Cells[FO_row + CurrentRow, FO_Column + GetFieldCol(aField)].Value);
 {$ENDIF SM}
 {$IFDEF LIBXL }
   wCellType := WorkSheet.GetCellType(FO_row + aRow, FO_Column + GetFieldCol(aField));
   if (wCellType = CELLTYPE_EMPTY) or (wCellType = CELLTYPE_BLANK) then
-//  if (wCellType = CELLTYPE_EMPTY) then
     Exit;
   if WorkSheet.isDate(FO_row + aRow, FO_Column + GetFieldCol(aField)) then
   begin
@@ -408,9 +328,6 @@ end;
 function TbjXLSTable.GetFieldCurr(const aField: string): currency;
 var
   v_vt: variant;
-//  str: string;
-//  iValue: double;
-//  iCode: Integer;
 begin
   try
     v_vt := GetFieldVal(aField);
@@ -421,72 +338,19 @@ begin
 end;
 
 function TbjXLSTable.GetFieldFloat(const aField: string): double;
-//const
-//  formatChars: array[0..2] of Char = ',%''';
 var
   v_vt: variant;
   str: string;
   iValue: double;
   iCode: Integer;
-//  VType: Integer;
 begin
   try
     v_vt := GetFieldVal(aField);
     Result := v_vt;
   except
-{
-    VType := VarType(v_vt) and VarTypeMask;
-    case VType of
-      varString:
-      begin
-        str := V_vt;
-//    for ctr := low(formatChars) to high(formatChars) do
-//    if Pos(formatChars[ctr], str) > 0 then
-//      str := stringReplace(Str, formatChars[ctr], '', [rfIgnoreCase, rfReplaceAll]);
-        Val(Str, iValue, iCode);
-        if iCode = 0 then
-          Result := iValue;
-      end;
-    end;
-}
     Result := 0;
   end;
 end;
-{
-  VType := VarType(v_vt) and VarTypeMask;
-  // Set a string to match the type
-  case VType of
-  varEmpty:
-    begin
-    Result := 0;
-    Exit;
-    end;
-  varInteger:
-    begin
-    Result := V_vt;
-    end;
-  varDate:
-    begin
-    Result := V_vt;
-    end;
-  varDouble:
-    begin
-    Result := V_vt;
-    end;
-  varCurrency:
-    begin
-    Result := V_vt;
-    end;
-  varString:
-    begin
-    Val(Str, iValue, iCode);
-    if iCode = 0 then
-      Result := iValue;
-    end;
-  else
-    Result := 0;
-  end;
-}
 
 function TbjXLSTable.GetFieldToken(const aField: string): string;
 const
@@ -496,76 +360,6 @@ var
   ctr: integer;
 begin
   Result := '';
-{  v_vt := GetFieldVal(aField);
-  VType := VarType(v_vt) and VarTypeMask;
-  // Set a string to match the type
-  case VType of
-  varEmpty:
-    Exit;
-  end;
-  str := V_vt;
-  if Pos('%', str) > 0 then
-  begin
-    str := stringReplace(Str, '%', '', [rfIgnoreCase, rfReplaceAll]);
-    Result := str;
-    Exit;
-  end;
-  if RightStr(str, 3) = '.00' then
-  begin
-    str := stringReplace(Str, '.00', '', [rfIgnoreCase, rfReplaceAll]);
-    Result := str;
-    Exit;
-  end;
-  if RightStr(str, 2) = '.0' then
-  begin
-    str := stringReplace(Str, '.0', '', [rfIgnoreCase, rfReplaceAll]);
-    Result := str;
-    Exit;
-  end;
-  if Pos('.', str) > 0 then
-  begin
-    if STrtoFloat(str) < 1 then
-      Result := FormatFloat('##.##', V_vt * 100);
-    Exit;
-  end;
-}
-{
-  VType := VarType(v_vt) and VarTypeMask;
-  // Set a string to match the type
-  case VType of
-  varEmpty:
-    begin
-    Result := '';
-    Exit;
-    end;
-  varInteger:
-    begin
-    Result := InttoStr(V_vt);
-    end;
-  varDate:
-    begin
-    Result := InttoStr(V_vt);
-    end;
-  varDouble:
-    begin
-      if V_vt <1 then
-        Result := FormatFloat('##.##', V_vt * 100);
-    Result := FormatFloat('##.##', V_vt);
-//    ShowMessage('Double');
-    end;
-  varCurrency:
-    begin
-    Result := FormatFloat('##.##', V_vt);
-    end;
-  varString:
-    begin
-      Result := V_vt;
-//    ShowMessage('Text');
-    end;
-  else
-    Result := '';
-  end;
-}
 {$IFDEF SM }
   str := WorkSheet.Cells[FO_Row + CurrentRow,
     FO_Column + GetFieldCol(aField)].ValueAsString;
@@ -586,8 +380,6 @@ begin
 end;
 
 function TbjXLSTable.GetFieldString(const aField: string): string;
-//var
-//  val: variant;
 begin
   if FindField(AField) = nil then
   begin
@@ -595,10 +387,8 @@ begin
     Exit;
   end;
 {$IFDEF SM }
-//  Val := WorkSheet.Cells[FO_Row + CurrentRow,
-//    FO_Column + GetFieldCol(aField)].Value;
-  Result := UTF8Encode(WorkSheet.Cells[FO_Row + CurrentRow,
-    FO_Column + GetFieldCol(aField)].ValueAsString);
+  Result := WorkSheet.Cells[FO_Row + CurrentRow,
+    FO_Column + GetFieldCol(aField)].ValueAsString;
 {$ENDIF SM }
 {$IFDEF LIBXL }
   if WorkSheet.GetCellType(FO_row + CurrentRow, FO_Column + GetFieldCol(aField)) = CELLTYPE_NUMBER then
@@ -614,19 +404,6 @@ begin
 {$ENDIF LIBXL }
   Result := Trim(Result);
 end;
-
-
-{
-procedure TbjXLSTable.SetFieldType(const aField: string; const aType: integer);
-var
-  ctr: integer;
-  ccolumn: TColumn;
-begin
-  ctr := GetFieldCol(aField);
-  Ccolumn := WorkSheet.Columns[FO_Column + ctr];
-  Ccolumn.FormatStringIndex:= aType;
-end;
-}
 
 {$IFDEF SM }
 function TbjXLSTable.GetFieldObj(const aField: string): TColumn;
@@ -649,12 +426,8 @@ begin
   ctr := GetFieldCol(aField);
   if ctr = -1 then
     Exit;
-//  MyColumn:= WorkSheet.Columns[FO_Column + ctr];
   MyColumn:= GetFieldObj(AField);
-//  if Assigned(MyColumn)then
-//  begin
     MyColumn.FormatStringIndex := aFOrmat;
-//  end;
 end;
 
 procedure TbjXLSTable.SetFormatAt(const aCol: integer; aFOrmat: Integer);
@@ -706,12 +479,7 @@ begin
   WorkSheet.Cells[FO_Row + CurrentRow, FO_Column + GetFieldCol(aField)].Value := aValue;
 {$ENDIF SM }
 {$IFDEF LIBXL }
-//  if WorkSheet.GetCellType(FO_row + CurrentRow, FO_Column + GetFieldCol(aField)) = CELLTYPE_NUMBER then
-//    WorkSheet.WriteNum(FO_row + CurrentRow, FO_Column + GetFieldCol(aField), aValue);
-//  if WorkSheet.GetCellType(FO_row + CurrentRow, FO_Column + GetFieldCol(aField)) = CELLTYPE_STRING then
-//    WorkSheet.WriteStr(FO_row + CurrentRow, FO_Column + GetFieldCol(aField), nil);
   VType := VarType(aValue) and VarTypeMask;
-  // Set a string to match the type
   case VType of
   varEmpty:
     Exit;
@@ -727,7 +495,6 @@ begin
     WorkSheet.WriteStr(FO_row + CurrentRow, FO_Column + GetFieldCol(aField), pChar(string(aValue)));
   end;
 {$ENDIF LIBXL }
-//  WorkSheet.Cells[FO_Row + CurrentRow, FO_Column + GetFieldCol(aField)].Value := Decode(aValue);
 end;
 
 
@@ -743,7 +510,6 @@ begin
     Exit;
   end;
 {$IFDEF SM }
-//  WorkSheet.Cells[FO_Row + CurrentRow, FO_Column + GetFieldCol(aField)].Value := aValue;
   ptr := FindVarData(WorkSheet.Cells[FO_Row + CurrentRow, FO_Column + GetFieldCol(aField)].Value);
   ptr.VType := varString;
   ptr.VString := pChar(aValue);
@@ -765,7 +531,6 @@ begin
     Exit;
   end;
 {$IFDEF SM }
-//  WorkSheet.Cells[FO_Row + CurrentRow, FO_Column + GetFieldCol(aField)].Value := aValue;
   ptr := FindVarData(WorkSheet.Cells[FO_Row + CurrentRow, FO_Column + GetFieldCol(aField)].Value);
   ptr.VType := VarDouble;
   ptr.VDouble := aValue;
@@ -823,8 +588,8 @@ begin
       EOF := False;
       Exit;
     end;
-//    if SkipCount > 0 then
-    if (CurrentRow-wTempRow = SkipCount) then
+    if SkipCount > 0 then
+    if (CurrentRow-wTempRow >= SkipCount) then
       break;
     wTempRow := WTempRow - 1;
   end;
@@ -846,9 +611,8 @@ begin
         FLastRow := CurrentRow;
       Exit;
     end;
-//    if SkipCount > 0 then
-//    if wTempRow-CurrentRow >= SkipCount then
-    if wTempRow-CurrentRow = SkipCount then
+    if SkipCount > 0 then
+    if wTempRow-CurrentRow >= SkipCount then
       break;
     wTempRow := WTempRow + 1;
   END;
@@ -929,17 +693,12 @@ function TbjXLSTable.GetLastRow: integer;
 var
   wTempRow: integer;
 begin
-//  wTempRow := 0;
-//  if PageLen > 0 then
-//    wTempRow := FO_Row + PageLen - 1;
 (*
 {$IFDEF SM }
   FLastRow := WorkSheet.Rows.Count;
 {$ENDIF SM }
 *)
   wTempRow := FLastRow;
-//  if PageLen > 0 then
-//  if wTempRow < FLastRow then
   if wTempRow = -1 then
   begin
   wTempRow := 1;
@@ -955,7 +714,7 @@ var
   l_str: string;
 begin
   Result := -1;
-  l_str := PackStr(aName);
+  l_str := LowerCase(aName);
   idx := 0;
   if FieldList.Find(l_str, idx) then
   begin
@@ -966,7 +725,7 @@ end;
 function TbjXLSTable.FindField(const aName: string): pChar;
 begin
   Result := nil;
-  if GetFieldCol(aName) <>  -1 then
+  if GetFieldCol(aName) <> -1 then
     Result := pChar(aName);
 end;
 
@@ -980,7 +739,7 @@ begin
   setLength(ColumnList, aList.Count);
   for ctr := 0 to aList.Count-1 do
   begin
-    FieldList.Add(PackStr(aList.Strings[ctr]));
+    FieldList.Add(LowerCase(aList.Strings[ctr]));
     if ToWrite then
 {$IFDEF SM }
       WorkSheet.Cells[FO_Row, FO_Column + ctr].Value := aList.Strings[ctr];
@@ -988,7 +747,6 @@ begin
 {$IFDEF LIBXL }
       WorkSheet.WriteStr(FO_Row, FO_Column + ctr, pChar(aList.Strings[ctr]));
 {$ENDIF LIBXL}
-//      WorkSheet.Cells[FO_Row, FO_Column + ctr].Value := Decode(aList.Strings[ctr]);
   end;
   FieldList.Sorted := True;
   setLength(ColumnList, FieldList.Count);
@@ -1002,14 +760,13 @@ begin
 {$ENDIF LIBXL}
       Break;
     for j := 0 to FieldList.Count-1 do
-// Check Packstr
 {$IFDEF SM }
-    if PackStr(WorkSheet.Cells[FO_Row, FO_Column+ctr].ValueAsString) =
-      PackStr(FieldList.Strings[j]) then
+    if LowerCase(WorkSheet.Cells[FO_Row, FO_Column+ctr].ValueAsString) =
+      LowerCase(FieldList.Strings[j]) then
 {$ENDIF SM }
 {$IFDEF LIBXL }
-    if PackStr(WorkSheet.readStr(FO_Row, FO_Column+ctr)) =
-      FieldList.Strings[j] then
+    if LowerCase(WorkSheet.readStr(FO_Row, FO_Column+ctr)) =
+      LowerCase(FieldList.Strings[j]) then
 {$ENDIF LIBXL}
     begin
         ColumnList[j] := ctr;
@@ -1022,8 +779,6 @@ end;
 
 procedure TbjXLSTable.ParseXml(const aNode: IbjXml; const FldLst: TStringList);
 var
-  IDAlias: string;
-  IDNode, IDAliasNode: IbjXml;
   aliasNode: IbjXml;
 begin
   FldLst.Clear;
@@ -1032,18 +787,6 @@ begin
   begin
     FldLst.Add(aliasNode.GetContent);
     aliasNode := aNode.SearchForTag(aliasNode, 'Alias');
-  end;
-  IDList.Clear;
-  IDNode := aNode.SearchForTag(nil, 'KeyCol');
-  while Assigned(IDNode) do
-  begin
-    IDAlias := IDNode.Content;
-    IDAliasNode := aNode.SearchForTag(nil, IDAlias);
-    if Assigned(IDAliasNode) then
-      aliasNode := IDAliasNode.SearchForTag(nil, 'Alias');
-    if Assigned(aliasNode) then
-      IDList.Add(aliasNode.GetContent);
-    IDNode := aNode.SearchForTag(IDnode, 'KeyCol');
   end;
 end;
 
@@ -1069,10 +812,10 @@ begin
     end;
     for j := 0 to aList.Count-1 do
     begin
-      if PackStr(WorkSheet.Cells[FO_Row, FO_Column+ctr].ValueAsString) =
-        PackStr(aList.Strings[j]) then
+      if LowerCase(WorkSheet.Cells[FO_Row, FO_Column+ctr].ValueAsString) =
+        LowerCase(aList.Strings[j]) then
       begin
-        FieldList.Add(PackStr(aList.Strings[j]));
+        FieldList.Add(LowerCase(aList.Strings[j]));
         break;
       end;
     end;
@@ -1084,14 +827,11 @@ begin
     if Length(WorkSheet.Cells[FO_Row, FO_Column+ctr].ValueAsString) = 0 then
       Break;
     for j := 0 to FieldList.Count-1 do
+    if LowerCase(WorkSheet.Cells[FO_Row, FO_Column+ctr].ValueAsString) =
+      LowerCase(FieldList.Strings[j]) then
     begin
-// Check Packstr
-      if PackStr(WorkSheet.Cells[FO_Row, FO_Column+ctr].ValueAsString) =
-        PackStr(FieldList.Strings[j]) then
-      begin
         ColumnList[j] := ctr;
         break;
-      end;
     end;
   end;
 {$ENDIF SM }
@@ -1112,10 +852,10 @@ begin
     end;
     for j := 0 to aList.Count-1 do
     begin
-      if PackStr(WorkSheet.readStr(FO_Row, FO_Column+ctr)) =
-        PackStr(aList.Strings[j]) then
+      if LowerCase(WorkSheet.readStr(FO_Row, FO_Column+ctr)) =
+        LowerCase(aList.Strings[j]) then
       begin
-        FieldList.Add(PackStr(aList.Strings[j]));
+        FieldList.Add(LowerCase(aList.Strings[j]));
         break;
       end;
     end;
@@ -1127,56 +867,22 @@ begin
     if Length(WorkSheet.readStr(FO_Row, FO_Column+ctr)) = 0 then
       Break;
     for j := 0 to FieldList.Count-1 do
+    if LowerCase(WorkSheet.readStr(FO_Row, FO_Column+ctr)) =
+      LowerCase(FieldList.Strings[j]) then
     begin
-      if PackStr(WorkSheet.readStr(FO_Row, FO_Column+ctr)) =
-        FieldList.Strings[j] then
-      begin
         ColumnList[j] := ctr;
         break;
-      end;
     end;
   end;
 {$ENDIF LIBXL }
   Result := FieldList;
-  if IDList.Count > 0 then
-  begin
-    for  ctr := 0 to FieldList.count-1 do
-    begin
-      for j := 0 to IDList.Count-1 do
-      begin
-        if FieldList.Strings[ctr] = PackStr(IDList.Strings[j]) then
-        begin
-          if ColumnList[ctr] = 0 then
-            IDList.Delete(j-1);
-        end;
-        Break;
-      end;
-    end;
-  end;
 end;
 
-function TbjXLSTable.IsEmptyField(const aField: string; aRow: integer = -1): boolean;
+function TbjXLSTable.IsEmptyField(const aField: string; aRow: integer = 0): boolean;
 var
-//  v_vt: variant;
-//  VType  : Integer;
   Value: Variant;
 begin
-{
-  Result := False;
-  v_vt := GetFieldVal(aField);
-  VType := VarType(V_vt) and VarTypeMask;
-  case VType of
-  varEmpty:
-    Result := True;
-  varString:
-    if Length(Trim(V_vt)) = 0 then
-      Result := True;
-  end;
-}
-  if FindField(aField) = nil then
-    raise Exception.Create(aField + ' Column not defined');
-
-  if aRow = -1 then
+  if aRow = 0 then
     aRow := CurrentRow;
 { Comparison with UnAssigned may bot be necessary }
   Value := GetFieldVal(aField, aRow);
@@ -1185,30 +891,16 @@ begin
     Result := Value = '';
 end;
 
-function TbjXLSTable.IsEmpty(aRow: integer = -1): boolean;
+function TbjXLSTable.IsEmpty(aRow: integer = 0): boolean;
 var
   ctr: integer;
-  wList: TStringList;
 begin
   Result := True;
-  if aRow = -1 then
+  if aRow = 0 then
     aRow := CurrentRow;
-  wList := FieldList;
-  if IDList.Count > 0 then
-    wList := IDList;
-{
   for ctr := 0 to FieldList.Count-1 do
   begin
     if not IsEmptyField(FieldList[ctr], aRow) then
-    begin
-      Result := False;
-      Exit;
-    end;
-  end;
-}
-  for ctr := 0 to wList.Count-1 do
-  begin
-    if not IsEmptyField(wList[ctr], aRow) then
     begin
       Result := False;
       Exit;
