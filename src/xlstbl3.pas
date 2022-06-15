@@ -884,12 +884,12 @@ begin
       Break;
     if Pos('Dr_', WorkSheet.Cells[FO_Row, FO_Column+ctr].ValueAsString) > 0 then
     begin
-      FieldList.Add(WorkSheet.Cells[FO_Row, FO_Column+ctr].ValueAsString);
+      FieldList.Add(PackStr(WorkSheet.Cells[FO_Row, FO_Column+ctr].ValueAsString));
       Continue;
     end;
     if Pos('Cr_', WorkSheet.Cells[FO_Row, FO_Column+ctr].ValueAsString) > 0 then
     begin
-      FieldList.Add(WorkSheet.Cells[FO_Row, FO_Column+ctr].ValueAsString);
+      FieldList.Add(PackStr(WorkSheet.Cells[FO_Row, FO_Column+ctr].ValueAsString));
       Continue;
     end;
     for j := 0 to aList.Count-1 do
