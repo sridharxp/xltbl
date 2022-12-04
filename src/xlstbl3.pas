@@ -82,6 +82,7 @@ type
     FieldList: TStringList;
     ColumnList: array of integer;
     IDList: TStringList;
+    ListFieldList: TStringList;
     procedure SetXLSFile(const aName: string);
     procedure NewFile(const aName: string);
     procedure SetSheet(const aSheet: string);
@@ -96,6 +97,7 @@ type
     function GetFieldSDate(const aField: string): string;
     function GetFieldToken(const aField: string): string;
 //    procedure SetFieldType(const aField: string; const aType: integer);
+    function GetFieldName(const aName: string): string;
 {$IFDEF SM }
     function GetFieldObj(const aField: string): TColumn;
     function GetCellObj(const arow: integer; const aField: string): TCell; overload;
@@ -151,6 +153,7 @@ begin
   FToSaveFile := False;
   FieldList := THashedStringList.Create;
   IDList := THashedStringList.Create;
+  ListFieldList := THashedStringList.Create;
 {  FMaxRow := -1; }
   SkipCount := 1;
   FLastRow := -1;
@@ -162,6 +165,8 @@ begin
   FieldList.Free;
   if Assigned(IDList) then
   IDList.Free;
+  if Assigned(ListFieldList) then
+  ListFieldList.Free;
 if Owner then
 begin
 {$IFDEF SM }
@@ -787,6 +792,14 @@ begin
     Result := ColumnList[idx];
   end;
 end;
+function TbjXLSTable.GetFieldName(const aName: string): string;
+var
+  idx: integer;
+begin
+  Result := '';
+  idx := GetFieldCol(aName);
+  Result := WorkSheet.Cells[FO_Row, FO_Column+Idx].ValueAsString;
+end;
 
 function TbjXLSTable.FindField(const aName: string): pChar;
 begin
@@ -847,9 +860,11 @@ end;
 
 procedure TbjXLSTable.ParseXml(const aNode: IbjXml; const FldLst: TStringList);
 var
-  IDAlias: string;
+  IDAlias, ListAlias: string;
   IDNode, IDAliasNode: IbjXml;
   aliasNode: IbjXml;
+  ListNode:  IbjXml;
+  k: Integer;
 begin
   FldLst.Clear;
   aliasNode := aNode.SearchForTag(nil, 'Alias');
@@ -869,6 +884,16 @@ begin
     if Assigned(aliasNode) then
       IDList.Add(aliasNode.GetContent);
     IDNode := aNode.SearchForTag(IDnode, 'KeyCol');
+  end;
+  ListFieldList.Clear;
+  ListNode := aNode.SearchForTag(nil, 'ListCol');
+  while Assigned(ListNode) do
+  begin
+    ListAlias := ListNode.GetContent;
+    ListFieldList.Add(ListAlias);
+    for k := 1 to 9 do
+    FldLst.Add(PackStr(ListAlias + IntToStr(k)));
+    ListNode := aNode.SearchForTag(Listnode, 'ListCol');
   end;
 end;
 
