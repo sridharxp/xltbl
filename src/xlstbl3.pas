@@ -16,7 +16,7 @@ See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License version 3
  along with Table interface for Excel Worksheet  If not, see <http://www.gnu.org/licenses/>.
 *)
-unit xlstbl3;
+unit xlstbl31;
 {$DEFINE SM }
 {$IFNDEF SM }
 {$DEFINE LIBXL }
@@ -88,6 +88,7 @@ type
     procedure SetSheet(const aSheet: string);
     procedure Close;
     procedure SetOrigin(const aRow, aColumn: integer);
+    procedure SetOColumn(const aColumn: integer);
     function GetFieldVal(const aField: string; aRow: integer = -1): variant;
 //    function GetFieldFmla(const aField: string): string;
 //    function GetFieldStr(const aField: string): string;
@@ -130,7 +131,7 @@ type
     destructor Destroy; override;
 
     property O_Row: integer read FO_row;
-    property O_Column: integer read FO_Column;
+    property O_Column: integer read FO_Column write SetOColumn;
 {    property MaxRow: integer read FMaxRow write FMaxRow; }
     property XLSFileName: string write SetXLSFile;
     property ToSaveFile: boolean read FToSaveFile write FToSaveFile;
@@ -225,7 +226,7 @@ begin
   FXLSFileName := aName;
   FOwner := True;
   Workbook := TBinBook.Create;
-  Workbook.setKey('Sri', 'windows-21212c060ecde40e64bf6569abo5p2h2');
+  Workbook.setKey('Name', 'Key');
   if FileExists(aName) then
     Workbook.load(pChar(aName));
 //  WorkSheet := Workbook.getSheet(0);
@@ -289,6 +290,10 @@ begin
   FO_Column :=aColumn;
 end;
 
+procedure TbjXLSTable.SetOColumn(const aColumn: integer);
+begin
+  FO_Column :=aColumn;
+end;
 function TbjXLSTable.GetFieldVal(const aField: string; aRow: integer = -1): variant;
 {$IFDEF LIBXL }
 var
