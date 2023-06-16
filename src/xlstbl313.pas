@@ -19,7 +19,8 @@ You should have received a copy of the GNU General Public License version 3
 unit xlstbl313;
 {$DEFINE SM }
 {$IFNDEF SM }
-{$DEFINE LIBXL }
+{.$DEFINE LIBXL }
+{$DEFINE NativeExcel }
 {$ENDIF SM }
 
 interface
@@ -48,6 +49,7 @@ type
 {$ENDIF }
 
 type
+ValidFormat = (vfGeneral, vfInteger, vfDate, vfText);
 
   TbjXLSTable = class(TInterfacedObject)
   private
@@ -74,8 +76,8 @@ type
     WorkSheet: TSheet;
 {$ENDIF SM }
 {$IFDEF LIBXL }
-    Workbook: TbOOK;
-    WorkSheet: TSheet;
+    Workbook: TXLbOOK;
+    WorkSheet: TXLSheet;
 {$ENDIF LIBXL }
 {$IFDEF NativeExcel }
     Workbook: IXLSWorkbook;
@@ -114,6 +116,8 @@ type
 {$ENDIF SM }
 {$IFDEF NativeExcel }
     function GetFieldObj(const aField: string): IXLSRange;
+    function GetCellObj(const arow: integer; const aField: string): IXLSRange; overload;
+    function GetCellObj(const arow: integer; const aCol: integer): IXLSRange; overload;
 {$ENDIF NativeExcel }
     procedure SetFieldVal(const aField: string; const aValue: variant);
     procedure SetFieldStr(const aField: string; const aValue: string);
@@ -360,10 +364,10 @@ var
   v_vt: variant;
   VType: Integer;
   mnth: integer;
-  str: string;
 begin
   v_vt := GetFieldVal(aField);
-  str := V_vt;
+  if VarIsNull(v_vt) then
+    Exit;
   VType := VarType(V_vt) and VarTypeMask;
   case VType of
   varDate:
@@ -371,8 +375,8 @@ begin
   varString:
   begin
      Result := V_vt;
-    if str[1] = '''' then
-      Result := Copy(Str, 2, Length(str)-1);
+    if Result[1] = '''' then
+      Result := Copy(Result, 2, Length(Result)-1);
     end;
   end;
 end;
@@ -381,8 +385,10 @@ function TbjXLSTable.GetFieldCurr(const aField: string): currency;
 var
   v_vt: variant;
 begin
+  v_vt := GetFieldVal(aField);
+  if VarIsNull(v_vt) then
+    Exit;
   try
-    v_vt := GetFieldVal(aField);
     Result := v_vt;
   except
     Result := 0;
@@ -393,8 +399,10 @@ function TbjXLSTable.GetRecFloat(const aCol: Integer; aRow: integer = -1): Doubl
 var
   v_vt: variant;
 begin
+  v_vt := GetRecVal(aCol);
+  if VarIsNull(v_vt) then
+    Exit;
   try
-    v_vt := GetRecVal(aCol, aRow);
     Result := v_vt;
   except
     Result := 0;
@@ -407,8 +415,10 @@ var
   iValue: double;
   iCode: Integer;
 begin
+  v_vt := GetFieldVal(aField, aRow);
+  if VarIsNull(v_vt) then
+    Exit;
   try
-    v_vt := GetFieldVal(aField, aRow);
     Result := v_vt;
   except
     Result := 0;
@@ -546,16 +556,31 @@ end;
 procedure TbjXLSTable.SetCellFormat(const aField: string; aFOrmat: Integer);
 var
   ctr: integer;
+{$IFDEF SM }
   MyCell: TCell;
+{$ENDIF SM }
+{$IFDEF NativeExcel }
+  MyCell: TCell;
+{$ENDIF SM }
 begin
   ctr := GetFieldCol(aField);
   if ctr = -1 then
     Exit;
   MyCell := GetCellObj(FO_Row + CurrentRow, aField);
+{$IFDEF SM }
   MyCell.FormatStringIndex := aFOrmat;
+{$ENDIF SM }
+{$IFDEF NativeExcel }
+{$ENDIF SM }
 end;
+{$ENDIF SM }
 
+{$IFDEF SM }
 function TbjXLSTable.GetCellObj(const arow: integer; const aField: string): TCell;
+{$ENDIF SM }
+{$IFDEF NativeExcel }
+function TbjXLSTable.GetCellObj(const arow: integer; const aField: string): IXLSRange;
+{$ENDIF NativeExcel }
 var
   ctr: integer;
 begin
@@ -563,11 +588,15 @@ begin
   Result := WorkSheet.Cells[FO_Row + aRow, FO_Column + ctr];
 end;
 
+{$IFDEF SM }
 function TbjXLSTable.GetCellObj(const arow: integer; const aCol: integer): TCell;
+{$ENDIF SM }
+{$IFDEF NativeExcel }
+function TbjXLSTable.GetCellObj(const arow: integer; const aCol: integer): IXLSRange;
+{$ENDIF NativeExcel }
 begin
   Result := WorkSheet.Cells[FO_Row + aRow, FO_Column + aCol];
 end;
-{$ENDIF SM }
 
 procedure TbjXLSTable.SetFieldVal(const aField: string; const aValue: variant);
 {$IFDEF LIBXL }
@@ -786,7 +815,7 @@ begin
   WorkSheet.removeRow(FO_row + CurrentRow, FO_row + CurrentRow+1, True);
 {$ENDIF LIBXL }
 {$IFDEF NativeExcel }
-  WorkSheet.Selection.EntireRow[FO_row + CurrentRow].Delete(xlShiftUp);;
+  WorkSheet.RCRange[1, FO_row + CurrentRow, 1, FO_row + CurrentRow].EntireRow.Delete(xlShiftUp);
 {$ENDIF NativeExcel }
 
   if IsEmpty then
