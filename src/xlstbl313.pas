@@ -815,7 +815,7 @@ begin
   WorkSheet.removeRow(FO_row + CurrentRow, FO_row + CurrentRow+1, True);
 {$ENDIF LIBXL }
 {$IFDEF NativeExcel }
-  WorkSheet.RCRange[1, FO_row + CurrentRow, 1, FO_row + CurrentRow].EntireRow.Delete(xlShiftUp);
+  WorkSheet.RCRange[FO_row + CurrentRow, 0, FO_row + CurrentRow, 0].EntireRow.Delete(xlShiftUp);
 {$ENDIF NativeExcel }
 
   if IsEmpty then
