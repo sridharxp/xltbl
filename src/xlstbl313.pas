@@ -37,7 +37,7 @@ uses
 {$IFDEF NativeExcel }
   nExcel,
 {$ENDIF NativeExcel }
-  bjXml3_1,
+  bjXml33,
   Variants,
   StrUtils,
   VchLib,
@@ -78,6 +78,7 @@ ValidFormat = (vfGeneral, vfInteger, vfDate, vfText);
 {$IFDEF LIBXL }
     Workbook: TXLbOOK;
     WorkSheet: TXLSheet;
+  wDateFormat: TXLFormat;
 {$ENDIF LIBXL }
 {$IFDEF NativeExcel }
     Workbook: IXLSWorkbook;
@@ -97,7 +98,6 @@ ValidFormat = (vfGeneral, vfInteger, vfDate, vfText);
     procedure SetOrigin(const aRow, aColumn: integer);
     procedure SetOColumn(const aColumn: integer);
     function GetRecVal(const aCol: Integer; aRow: integer = -1): variant;
-    function GetRecFloat(const aCol: Integer; aRow: integer = -1): Double;
     function GetRecString(const aCol: Integer; aRow: integer = -1): string;
     function GetFieldVal(const aField: string; aRow: integer = -1): variant;
     function GetFieldCurr(const aField: string): currency;
@@ -151,6 +151,7 @@ ValidFormat = (vfGeneral, vfInteger, vfDate, vfText);
     property PageLen: integer read FPageLen write FPagelen;
     property LastRow: integer read GetLastRow;
   end;
+Function TryJulianDateToDateTime(const AValue: Double; out ADateTime: TDateTime): Boolean;
 
 implementation
 
@@ -207,7 +208,7 @@ begin
   XL.SaveAs(AName);
 {$ENDIF SM }
 {$IFDEF LIBXL }
-  Workbook.Save(PChar(AName));
+  Workbook.Save(PChar(aName))
 {$ENDIF LIBXL}
 {$IFDEF NativeExcel }
   Workbook.SaveAs(aName);
@@ -216,6 +217,8 @@ end;
 
 procedure TbjXLSTable.SetXLSFile(const aName: string);
 begin
+  if FXlsFileName = aName then
+    Exit;
   Close;
 {$IFDEF SM }
   FXLSFileName := aName;
@@ -227,12 +230,21 @@ begin
   Workbook := XL.Workbook;
 {$ENDIF SM }
 {$IFDEF LIBXL }
+  if Assigned(WorkSheet) then
+    WorkSheet.Free;
   FXLSFileName := aName;
   FOwner := True;
-  Workbook := TBinBook.Create;
+  if (Pos('.xlsx', LowerCase(aName)) = 0) then
+  Workbook := TBinBook.Create
+  else
+  Workbook := TXmlBook.Create;
+  Workbook.setLocale('UTF-8');
   Workbook.setKey('Name', 'Key');
   if FileExists(aName) then
     Workbook.load(pChar(aName));
+  wDateFormat := Workbook.addFormat();
+  wDateFormat.setNumFormat(NUMFORMAT_DATE);
+  wDateFormat.Free;
 {$ENDIF LIBXL}
 {$IFDEF NativeExcel }
   FXLSFileName := aName;
@@ -282,11 +294,12 @@ begin
   end;
 {$ENDIF SM}
 {$IFDEF LIBXL }
+  if Assigned(WorkSheet) then
+    WorkSheet.Free;
   WorkSheet := Workbook.GetSheetbyName(PChar(aSheet));
   if not Assigned(WorkSheet) then
   begin
-    Workbook.addSheet(PChar(aSheet));
-    WorkSheet := Workbook.GetSheetByName(PChar(aSheet));
+    WorkSheet := Workbook.addSheet(PChar(aSheet));
   end;
 {$ENDIF LIBXL}
 {$IFDEF NativeExcel }
@@ -318,7 +331,7 @@ function TbjXLSTable.GetRecVal(const aCol: Integer; aRow: integer = -1): variant
 {$IFDEF LIBXL }
 var
   wCellType: CellType;
-  wDateFormat: TFormat;
+  rDate: double;
 {$ENDIF LIBXL}
 begin
   if aRow = -1 then
@@ -332,13 +345,13 @@ begin
     Exit;
   if WorkSheet.isDate(FO_row + aRow, FO_Column + aCol) then
   begin
-    wDateFormat := Workbook.addFormat();
-    wDateFormat.setNumFormat(NUMFORMAT_DATE);
-    Result := FormatDateTime('YYYYMMDD', WorkSheet.readNum(FO_row + aRow, FO_Column + aCol, wDateformat));
+    rDate := WorkSheet.readNum(FO_row + aRow, FO_Column + aCol, wDateformat);
+    Result := FormatDateTime('YYYYMMDD', rDate);
+    wDateFormat.Free;
     Exit;
   end;
   if wCellType = CELLTYPE_STRING then
-    Result := WorkSheet.readStr(FO_row + aRow, FO_Column + aCol;
+    Result := WorkSheet.readStr(FO_row + aRow, FO_Column + aCol);
   if wCellType = CELLTYPE_NUMBER then
     Result := WorkSheet.readNum(FO_row + aRow, FO_Column + aCol);
 {$ENDIF LIBXL}
@@ -364,48 +377,66 @@ var
   v_vt: variant;
   VType: Integer;
   mnth: integer;
+  rDt: TDateTime;
 begin
   v_vt := GetFieldVal(aField);
-  if VarIsNull(v_vt) then
+  if VarIsEmpty(v_vt) or VarIsNull(v_vt) then
     Exit;
   VType := VarType(V_vt) and VarTypeMask;
   case VType of
   varDate:
     Result := FormatDateTime('YYYYMMDD', V_vt);
+  VarDouble:
+    begin
+    if TryJulianDateToDateTime(V_Vt, rDt) then
+      V_Vt := rDt;
+    Result := FormatDateTime('YYYYMMDD', V_Vt);
+    end;
   varString:
   begin
      Result := V_vt;
+    Result := StringReplace(Result, #10, '', [rfReplaceAll, rfIgnoreCase]);
     if Result[1] = '''' then
       Result := Copy(Result, 2, Length(Result)-1);
     end;
+  else
+    Result := GetFieldString(aField);
   end;
 end;
 
 function TbjXLSTable.GetFieldCurr(const aField: string): currency;
 var
   v_vt: variant;
+  rStr: string;
+  aCol: Integer;
 begin
+  if FindField(AField) = nil then
+  begin
+    raise Exception.Create(aField + ' Column not defined');
+    Exit;
+  end;
+  aCol := GetFieldCol(aField);
   v_vt := GetFieldVal(aField);
-  if VarIsNull(v_vt) then
+  if VarIsEmpty(v_vt) or VarIsNull(v_vt) then
     Exit;
   try
     Result := v_vt;
   except
     Result := 0;
   end;
-end;
+  if Result = 0 then
 
-function TbjXLSTable.GetRecFloat(const aCol: Integer; aRow: integer = -1): Double;
-var
-  v_vt: variant;
 begin
-  v_vt := GetRecVal(aCol);
-  if VarIsNull(v_vt) then
-    Exit;
-  try
-    Result := v_vt;
-  except
-    Result := 0;
+   rStr := GetFieldString(aField);
+    if Length(rStr) = 0 then
+      Exit;
+    rStr := StringReplace(rStr, ',', '', [rfReplaceAll, rfIgnoreCase]);
+    rStr := StringReplace(rStr, #10, '', [rfReplaceAll, rfIgnoreCase]);
+    try
+    Result := StrtoFloat(rStr);
+    except
+      Result := 0;
+    end;
   end;
 end;
 function TbjXLSTable.GetFieldFloat(const aField: string; aRow: integer = -1): double;
@@ -414,9 +445,16 @@ var
   str: string;
   iValue: double;
   iCode: Integer;
+  aCol: Integer;
 begin
-  v_vt := GetFieldVal(aField, aRow);
-  if VarIsNull(v_vt) then
+  if FindField(AField) = nil then
+  begin
+    raise Exception.Create(aField + ' Column not defined');
+    Exit;
+  end;
+  aCol := GetFieldCol(aField);
+  v_vt := GetRecVal(aCol, aRow);
+  if VarIsEmpty(v_vt) or VarIsNull(v_vt) then
     Exit;
   try
     Result := v_vt;
@@ -429,6 +467,7 @@ function TbjXLSTable.GetFieldToken(const aField: string): string;
 const
   formatChars: array[0..6] of string = ('%', '.00', '.0', '.', ',', '-', '''');
 var
+  rVal: Variant;
   wStr: WideString;
   rCellStr: String;
   ctr: integer;
@@ -448,9 +487,11 @@ begin
     FO_Column + GetFieldCol(aField));
 {$ENDIF LIBXL }
 {$IFDEF NativeExcel }
-  try
-  wstr := WorkSheet.Cells[FO_Row + CurrentRow,
+  rVal := WorkSheet.Cells[FO_Row + CurrentRow,
     FO_Column + GetFieldCol(aField)].Value;
+  try
+  if not (VarIsEmpty(rVal) or VarIsNull(rVal)) then
+    wStr := rVal;
   except
     wStr := '';
   end;
@@ -468,12 +509,7 @@ var
   aCol: Integer;
 begin
   if FindField(AField) = nil then
-  begin
     raise Exception.Create(aField + ' Column not defined');
-    Exit;
-  end;
-  if IsEmptyField(aField) then
-      Exit;
   aCol := GetFieldCol(aField);
   Result := GetRecString(aCol, aRow);
 end;
@@ -512,6 +548,7 @@ begin
   Result := Trim(Result);
 end;
 
+{$IFNDEF LIBXL }
 {$IFDEF SM }
 function TbjXLSTable.GetFieldObj(const aField: string): TColumn;
 {$ENDIF SM }
@@ -531,6 +568,7 @@ begin
   Result := WorkSheet.Selection.EntireColumn.Item[FO_Column + ctr]; 
 {$ENDIF NativeExcel }
 end;
+{$ENDIF LIBXL }
 
 {$IFDEF SM }
 procedure TbjXLSTable.SetFieldFormat(const aField: string; const aFOrmat: Integer);
@@ -575,6 +613,7 @@ begin
 end;
 {$ENDIF SM }
 
+{$IFNDEF LIBXL }
 {$IFDEF SM }
 function TbjXLSTable.GetCellObj(const arow: integer; const aField: string): TCell;
 {$ENDIF SM }
@@ -597,6 +636,7 @@ function TbjXLSTable.GetCellObj(const arow: integer; const aCol: integer): IXLSR
 begin
   Result := WorkSheet.Cells[FO_Row + aRow, FO_Column + aCol];
 end;
+{$ENDIF LIBXL }
 
 procedure TbjXLSTable.SetFieldVal(const aField: string; const aValue: variant);
 {$IFDEF LIBXL }
@@ -725,7 +765,7 @@ begin
   WorkSheet.Cells[FO_Row + CurrentRow, FO_Column + aCol].Value := aMsg;
 {$ENDIF SM }
 {$IFDEF LIBXL }
-  VType := VarType(VMsg) and VarTypeMask;
+  VType := VarType(aMsg) and VarTypeMask;
   // Set a string to match the type
   case VType of
   varEmpty:
@@ -812,7 +852,7 @@ begin
   WorkSheet.Rows.DeleteRows(FO_row + CurrentRow, FO_row + CurrentRow);
 {$ENDIF SM }
 {$IFDEF LIBXL }
-  WorkSheet.removeRow(FO_row + CurrentRow, FO_row + CurrentRow+1, True);
+  WorkSheet.removeRow(FO_row + CurrentRow, FO_row + CurrentRow);
 {$ENDIF LIBXL }
 {$IFDEF NativeExcel }
   WorkSheet.RCRange[FO_row + CurrentRow, 0, FO_row + CurrentRow, 0].EntireRow.Delete(xlShiftUp);
@@ -951,7 +991,7 @@ begin
     rCellStr := WorkSheet.Cells[FO_Row, FO_Column+ctr].ValueAsString;
 {$ENDIF SM }
 {$IFDEF LIBXL }
-    rCellStr := WorkSheet.readStr(FO_Row, FO_Column+ctr;
+    rCellStr := WorkSheet.readStr(FO_Row, FO_Column+ctr);
 {$ENDIF LIBXL}
 {$IFDEF NativeExcel }
     rCellStr := WorkSheet.Cells[FO_Row, FO_Column+ctr].Value;
@@ -1109,11 +1149,7 @@ begin
 {$IFDEF NativeExcel }
   for ctr := 0 to aList.Count + 29-1 do
   begin
-  try
-    rCellStr := WorkSheet.Cells[FO_Row, FO_Column+ctr].Value;
-    except
-    rCellStr := '';
-    end;
+    rCellStr := VarToWideStr(WorkSheet.Cells[FO_Row, FO_Column+ctr].Value);
     if Length(rCellStr) = 0 then
       Break;
     if Pos('Dr_', rCellStr) > 0 then
@@ -1140,11 +1176,7 @@ begin
   setLength(ColumnList, FieldList.Count);
   for ctr := 0 to aList.Count + 29-1 do
   begin
-    try
-    rCellStr := WorkSheet.Cells[FO_Row, FO_Column+ctr].Value;
-    except
-    rCellStr := '';
-    end;
+    rCellStr := VarToWideStr(WorkSheet.Cells[FO_Row, FO_Column+ctr].Value);
     if Length(rCellStr) = 0 then
       Break;
     for j := 0 to FieldList.Count-1 do
@@ -1186,7 +1218,8 @@ begin
     aRow := CurrentRow;
 { Comparison with UnAssigned may bot be necessary }
   Value := GetFieldVal(aField, aRow);
-  Result := VarIsClear(Value) or VarIsEmpty(Value) or VarIsNull(Value) or (VarCompareValue(Value, Unassigned) = vrEqual);
+{  Result := VarIsClear(Value) or VarIsEmpty(Value) or VarIsNull(Value) or (VarCompareValue(Value, Unassigned) = vrEqual); }
+  Result := VarIsEmpty(Value) or VarIsNull(Value);
   if (not Result) and VarIsStr(Value) then
     Result := Value = '';
 end;
@@ -1210,6 +1243,24 @@ begin
       Exit;
     end;
   end;
+end;
+Function TryJulianDateToDateTime(const AValue: Double; out ADateTime: TDateTime): Boolean;
+var
+  a,b,c,d,e,m:longint;
+  day,month,year: word;
+begin
+  a := trunc(AValue + 32044.5);
+  b := (4*a + 3) div 146097;
+  c := a - (146097*b div 4);
+  d := (4*c + 3) div 1461;
+  e := c - (1461*d div 4);
+  m := (5*e+2) div 153;
+  day := e - ((153*m + 2) div 5) + 1;
+  month := m + 3 - 12 *  ( m div 10 );
+  year := (100*b) + d - 4800 + ( m div 10 );
+  result := TryEncodeDate ( Year, Month, Day, ADateTime );
+  if Result then
+    ADateTime:=ADateTime+frac(AValue-0.5);
 end;
 
 end.
