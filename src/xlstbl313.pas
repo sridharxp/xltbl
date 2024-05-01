@@ -17,11 +17,10 @@ You should have received a copy of the GNU General Public License version 3
  along with Table interface for Excel Worksheet  If not, see <http://www.gnu.org/licenses/>.
 *)
 unit xlstbl313;
-{$DEFINE SM }
-{$IFNDEF SM }
+{.$DEFINE SM }
 {.$DEFINE LIBXL }
-{$DEFINE NativeExcel }
-{$ENDIF SM }
+{.$DEFINE NXL }
+{$DEFINE LXW}
 
 interface
 uses
@@ -32,11 +31,14 @@ uses
   XLSWorkbook,
 {$ENDIF SM }
 {$IFDEF LibXL }
-  LibXL,
+  LibXL404,
 {$ENDIF }
-{$IFDEF NativeExcel }
+{$IFDEF NXL }
   nExcel,
-{$ENDIF NativeExcel }
+{$ENDIF NXL }
+{$IFDEF LXW }
+  xlsxwriterapi,
+{$ENDIF LXW }
   bjXml33,
   Variants,
   StrUtils,
@@ -63,7 +65,6 @@ ValidFormat = (vfGeneral, vfInteger, vfDate, vfText);
     FLastRow:  integer;
   protected
     function IsEmpty(aRow: integer = -1): boolean;
-    function GetFieldCol(const aName: string): integer;
     function GetLastRow: integer;
   public
   { Public declarations }
@@ -79,11 +80,16 @@ ValidFormat = (vfGeneral, vfInteger, vfDate, vfText);
     Workbook: TXLbOOK;
     WorkSheet: TXLSheet;
   wDateFormat: TXLFormat;
+    wStrFormat: TXLFormat;
 {$ENDIF LIBXL }
-{$IFDEF NativeExcel }
+{$IFDEF NXL }
     Workbook: IXLSWorkbook;
     WorkSheet: IXLSWorksheet;
-{$ENDIF NativeExcel }
+{$ENDIF NXL }
+{$IFDEF LXW }
+    Workbook: PLXW_Workbook;
+    WorkSheet: PLXW_WorkSheet;
+{$ENDIF LXW }
     CurrentColumn: integer;
     CurrentRow: integer;
     SkipCount: integer;
@@ -92,7 +98,7 @@ ValidFormat = (vfGeneral, vfInteger, vfDate, vfText);
     IDList: TStringList;
     ListColList: TStringList;
     procedure SetXLSFile(const aName: string);
-    procedure NewFile(const aName: string);
+    function GetFieldCol(const aName: string): integer;
     procedure SetSheet(const aSheet: string);
     procedure Close;
     procedure SetOrigin(const aRow, aColumn: integer);
@@ -114,15 +120,17 @@ ValidFormat = (vfGeneral, vfInteger, vfDate, vfText);
     procedure SetFormatAt(const aCol: integer; aFOrmat: Integer);
     procedure SetCellFormat(const aField: string; aFOrmat: Integer);
 {$ENDIF SM }
-{$IFDEF NativeExcel }
+{$IFDEF NXL }
     function GetFieldObj(const aField: string): IXLSRange;
     function GetCellObj(const arow: integer; const aField: string): IXLSRange; overload;
     function GetCellObj(const arow: integer; const aCol: integer): IXLSRange; overload;
-{$ENDIF NativeExcel }
-    procedure SetFieldVal(const aField: string; const aValue: variant);
+{$ENDIF NXL }
+    procedure SetFieldVal(Const aField: string; const aValue: variant); overload;
+    procedure SetFieldVal(const aField: string; const aValue: TVarRec; aFormat: Pointer); overload;
     procedure SetFieldStr(const aField: string; const aValue: string);
     procedure SetFieldWStr(const aField: string; const aValue: string);
     procedure SetFieldNum(const aField: string; const aValue: double);
+    procedure SetRecVal(const aCol: Integer; const aValue: TVarRec; aFormat: Pointer); overload;
     function FindField(const aName: string): pChar;
 //    function GetFieldCol(const aName: string): integer;
     procedure SetFields(const aList: TStrings; const ToWrite: boolean);
@@ -163,10 +171,10 @@ begin
   FO_Row  := 0;
   FO_Column  := 0;
 }
-{$IFDEF NativeExcel }
+{$IFDEF NXL }
   FO_Row  := 1;
   FO_Column  := 1;
-{$ENDIF NativeExcel }
+{$ENDIF NXL }
   FToSaveFile := False;
   FieldList := THashedStringList.Create;
   IDList := THashedStringList.Create;
@@ -177,7 +185,7 @@ end;
 
 destructor TbjXLSTable.Destroy;
 begin
-  XLSFileName := '';
+{  XLSFileName := ''; }
   FieldList.Clear;
   FieldList.Free;
   if Assigned(IDList) then
@@ -197,9 +205,9 @@ if Length(FXlsFileName) > 0 then
 {$IFDEF LIBXL }
   Workbook.Save(PChar(FXlsFileName));
 {$ENDIF LIBXL}
-{$IFDEF NativeExcel }
+{$IFDEF NXL }
     Workbook.SaveAs(FXlsFileName);
-{$ENDIF NativeExcel }
+{$ENDIF NXL }
 end;
 
 procedure TbjXLSTable.SaveAs(const aName  : string);
@@ -210,9 +218,9 @@ begin
 {$IFDEF LIBXL }
   Workbook.Save(PChar(aName))
 {$ENDIF LIBXL}
-{$IFDEF NativeExcel }
+{$IFDEF NXL }
   Workbook.SaveAs(aName);
-{$ENDIF NativeExcel }
+{$ENDIF NXL }
 end;
 
 procedure TbjXLSTable.SetXLSFile(const aName: string);
@@ -230,8 +238,6 @@ begin
   Workbook := XL.Workbook;
 {$ENDIF SM }
 {$IFDEF LIBXL }
-  if Assigned(WorkSheet) then
-    WorkSheet.Free;
   FXLSFileName := aName;
   FOwner := True;
   if (Pos('.xlsx', LowerCase(aName)) = 0) then
@@ -244,22 +250,30 @@ begin
     Workbook.load(pChar(aName));
   wDateFormat := Workbook.addFormat();
   wDateFormat.setNumFormat(NUMFORMAT_DATE);
-  wDateFormat.Free;
+  wStrFormat := Workbook.addFormat();
+  wStrFormat.setNumFormat(NUMFORMAT_TEXT);
 {$ENDIF LIBXL}
-{$IFDEF NativeExcel }
+{$IFDEF NXL }
   FXLSFileName := aName;
   FOwner := True;
   Workbook := TXLSWorkbook.Create;
   if FileExists(aName) then
     Workbook.Open(aName);
-{$ENDIF NativeExcel }
+{$ENDIF NXL }
+{$IFDEF LXW }
+  FXLSFileName := aName;
+  FOwner := True;
+  WorkBook := workbook_new(pUTF8Char(aName));
+{$ENDIF LXW }
 end;
 
+{
 procedure TbjXLSTable.NewFile(const aName  : string);
 begin
   SetXlsFile('');
   FXLSFileName := aName;
 end;
+}
 
 procedure TbjXLSTable.close;
 begin
@@ -271,10 +285,19 @@ begin
 {$IFDEF LIBXL }
   if Assigned(Workbook) then
   Workbook.Free;
+  if Assigned(wDateFormat) then
+    wDateFormat.Free;
+  if Assigned(wStrFormat) then
+    wStrFormat.Free;
+  if Assigned(WorkSheet) then
+    WorkSheet.Free;
 {$ENDIF LIBXL}
-{$IFDEF NativeExcel }
+{$IFDEF NXL }
   Workbook := nil;
-{$ENDIF NativeExcel }
+{$ENDIF NXL }
+{$IFDEF LXW }
+  workbook_close(Workbook);
+{$ENDIF LXW }
 end;
 
 procedure TbjXLSTable.SetSheet(const aSheet: string);
@@ -302,7 +325,7 @@ begin
     WorkSheet := Workbook.addSheet(PChar(aSheet));
   end;
 {$ENDIF LIBXL}
-{$IFDEF NativeExcel }
+{$IFDEF NXL }
   for i := 1 to Workbook.Sheets.Count do
   begin
     if Workbook.Sheets.Entries[i].Name = aSheet then
@@ -314,7 +337,10 @@ begin
   WorkSheet := nil;
   WorkSheet := Workbook.Sheets.Add;
   Workbook.Sheets[1].Name := aSheet;
-{$ENDIF NativeExcel }
+{$ENDIF NXL }
+{$IFDEF LXW }
+    Worksheet := workbook_add_worksheet(Workbook, pUTF8Char(aSheet));
+{$ENDIF LXW }
 end;
 
 procedure TbjXLSTable.SetOrigin(const aRow, aColumn: integer);
@@ -347,7 +373,6 @@ begin
   begin
     rDate := WorkSheet.readNum(FO_row + aRow, FO_Column + aCol, wDateformat);
     Result := FormatDateTime('YYYYMMDD', rDate);
-    wDateFormat.Free;
     Exit;
   end;
   if wCellType = CELLTYPE_STRING then
@@ -355,9 +380,9 @@ begin
   if wCellType = CELLTYPE_NUMBER then
     Result := WorkSheet.readNum(FO_row + aRow, FO_Column + aCol);
 {$ENDIF LIBXL}
-{$IFDEF NativeExcel }
+{$IFDEF NXL }
   Result := WorkSheet.Cells[FO_row + aRow, FO_Column + aCol].Value;
-{$ENDIF NativeExcel }
+{$ENDIF NXL }
 end;
 function TbjXLSTable.GetFieldVal(const aField: string; aRow: integer = -1): variant;
 var
@@ -474,19 +499,19 @@ var
 begin
   Result := '';
 {$IFDEF SM }
+  WorkSheet.Cells[FO_Row + CurrentRow,
+    FO_Column + GetFieldCol(aField)].FormatIndex := 35;
   wStr := WorkSheet.Cells[FO_Row + CurrentRow,
     FO_Column + GetFieldCol(aField)].ValueAsString;
   rCellStr := wStr;
 {$ENDIF SM }
 {$IFDEF LIBXL }
-  if WorkSheet.GetCellType(FO_row + CurrentRow, FO_Column + GetFieldCol(aField)) = CELLTYPE_NUMBER then
-    rCellStr := FloattoStr(WorkSheet.ReadNum(FO_Row + CurrentRow,
-    FO_Column + GetFieldCol(aField)));
-  if WorkSheet.GetCellType(FO_row + CurrentRow, FO_Column + GetFieldCol(aField)) = CELLTYPE_STRING then
     rCellStr := WorkSheet.readStr(FO_Row + CurrentRow,
-    FO_Column + GetFieldCol(aField));
+    FO_Column + GetFieldCol(aField), wStrFormat);
 {$ENDIF LIBXL }
-{$IFDEF NativeExcel }
+{$IFDEF NXL }
+  WorkSheet.Cells[FO_Row + CurrentRow,
+    FO_Column + GetFieldCol(aField)].NumberFormat := '@';
   rVal := WorkSheet.Cells[FO_Row + CurrentRow,
     FO_Column + GetFieldCol(aField)].Value;
   try
@@ -496,7 +521,7 @@ begin
     wStr := '';
   end;
   rCellStr := wStr;
-{$ENDIF NativeExcel }
+{$ENDIF NXL }
   rCellStr := Trim(rCellStr);;
   for ctr := low(formatChars) to high(formatChars) do
     if Pos(formatChars[ctr], rCellStr) > 0 then
@@ -520,23 +545,16 @@ begin
   if aRow = -1 then
     aRow := Currentrow;
 {$IFDEF SM }
+  WorkSheet.Cells[FO_Row + aRow, FO_Column + aCol].FormatIndex := 35;
   wStr := UTF8Encode(WorkSheet.Cells[FO_Row + aRow,
     FO_Column + aCol].ValueAsString);
   Result := wStr;
 {$ENDIF SM }
 {$IFDEF LIBXL }
-  if WorkSheet.GetCellType(FO_row + aRow, FO_Column + aCol) = CELLTYPE_NUMBER then
-  begin
-    Result := FloattoStr(WorkSheet.ReadNum(FO_Row + aRow,
-    FO_Column + aCol));
-  end;
-  if WorkSheet.GetCellType(FO_row + aRow, FO_Column + aCol) = CELLTYPE_STRING then
-  begin
-    Result := WorkSheet.readStr(FO_Row + aRow,
-    FO_Column + aCol);
-  end;
+  Result := WorkSheet.readStr(FO_Row + aRow, FO_Column + aCol, wStrFormat);
 {$ENDIF LIBXL }
-{$IFDEF NativeExcel }
+{$IFDEF NXL }
+  WorkSheet.Cells[FO_Row + aRow, FO_Column + aCol].NumberFormat := '@';
   try
   wStr := WorkSheet.Cells[FO_Row + aRow,
     FO_Column + aCol].Value;
@@ -544,31 +562,31 @@ begin
     wStr := '';
   end;
   Result := UTF8Encode(wStr);
-{$ENDIF NativeExcel }
+{$ENDIF NXL }
   Result := Trim(Result);
 end;
 
-{$IFNDEF LIBXL }
+
 {$IFDEF SM }
 function TbjXLSTable.GetFieldObj(const aField: string): TColumn;
-{$ENDIF SM }
-{$IFDEF NativeExcel }
-function TbjXLSTable.GetFieldObj(const aField: string): IXLSRange;
-{$ENDIF NativeExcel }
 var
   ctr: integer;
 begin
   ctr := GetFieldCol(aField);
-{$IFDEF SM }
   Result := WorkSheet.Columns[FO_Column + ctr];
+ end;
 {$ENDIF SM }
+{$IFDEF NXL }
+function TbjXLSTable.GetFieldObj(const aField: string): IXLSRange;
+var
+  ctr: integer;
+begin
+  ctr := GetFieldCol(aField);
 {.$IFDEF LIBXL }
 {.$ENDIF LIBXL }
-{$IFDEF NativeExcel }
   Result := WorkSheet.Selection.EntireColumn.Item[FO_Column + ctr]; 
-{$ENDIF NativeExcel }
 end;
-{$ENDIF LIBXL }
+{$ENDIF NXL }
 
 {$IFDEF SM }
 procedure TbjXLSTable.SetFieldFormat(const aField: string; const aFOrmat: Integer);
@@ -594,55 +612,57 @@ end;
 procedure TbjXLSTable.SetCellFormat(const aField: string; aFOrmat: Integer);
 var
   ctr: integer;
-{$IFDEF SM }
   MyCell: TCell;
-{$ENDIF SM }
-{$IFDEF NativeExcel }
-  MyCell: TCell;
-{$ENDIF SM }
 begin
   ctr := GetFieldCol(aField);
   if ctr = -1 then
     Exit;
   MyCell := GetCellObj(FO_Row + CurrentRow, aField);
-{$IFDEF SM }
   MyCell.FormatStringIndex := aFOrmat;
-{$ENDIF SM }
-{$IFDEF NativeExcel }
-{$ENDIF SM }
 end;
 {$ENDIF SM }
 
-{$IFNDEF LIBXL }
 {$IFDEF SM }
 function TbjXLSTable.GetCellObj(const arow: integer; const aField: string): TCell;
-{$ENDIF SM }
-{$IFDEF NativeExcel }
-function TbjXLSTable.GetCellObj(const arow: integer; const aField: string): IXLSRange;
-{$ENDIF NativeExcel }
 var
   ctr: integer;
 begin
   ctr := GetFieldCol(aField);
   Result := WorkSheet.Cells[FO_Row + aRow, FO_Column + ctr];
 end;
+{$ENDIF SM }
+{$IFDEF NXL }
+function TbjXLSTable.GetCellObj(const arow: integer; const aField: string): IXLSRange;
+var
+  ctr: integer;
+begin
+  ctr := GetFieldCol(aField);
+  Result := WorkSheet.Cells[FO_Row + aRow, FO_Column + ctr];
+end;
+{$ENDIF NXL }
 
 {$IFDEF SM }
 function TbjXLSTable.GetCellObj(const arow: integer; const aCol: integer): TCell;
-{$ENDIF SM }
-{$IFDEF NativeExcel }
-function TbjXLSTable.GetCellObj(const arow: integer; const aCol: integer): IXLSRange;
-{$ENDIF NativeExcel }
 begin
   Result := WorkSheet.Cells[FO_Row + aRow, FO_Column + aCol];
 end;
-{$ENDIF LIBXL }
+{$ENDIF SM }
+{$IFDEF NXL }
+function TbjXLSTable.GetCellObj(const arow: integer; const aCol: integer): IXLSRange;
+begin
+  Result := WorkSheet.Cells[FO_Row + aRow, FO_Column + aCol];
+end;
+{$ENDIF NXL }
 
 procedure TbjXLSTable.SetFieldVal(const aField: string; const aValue: variant);
 {$IFDEF LIBXL }
 var
   VType  : Integer;
 {$ENDIF LIBXL }
+{$IFDEF LXW }
+var
+  VType  : Integer;
+{$ENDIF LXW }
 begin
   if FindField(AField) = nil then
   begin
@@ -669,11 +689,97 @@ begin
     WorkSheet.WriteStr(FO_row + CurrentRow, FO_Column + GetFieldCol(aField), pChar(string(aValue)));
   end;
 {$ENDIF LIBXL }
-{$IFDEF NativeExcel }
+{$IFDEF NXL }
   WorkSheet.Cells[FO_Row + CurrentRow, FO_Column + GetFieldCol(aField)].Value := aValue;
-{$ENDIF NativeExcel }
+{$ENDIF NXL }
 end;
 
+procedure TbjXLSTable.SetFieldVal(const aField: string; const aValue: TVarRec; aFormat: Pointer);
+var
+  VType  : Integer;
+  rCol: Integer;
+begin
+  if FindField(AField) = nil then
+  begin
+    raise Exception.Create(aField + ' Column not defined');
+    Exit;
+  end;
+  rCol := GetFieldCol(aField);
+  SetRecVal(rCol, aValue, aFormat);
+end;
+procedure TbjXLSTable.SetRecVal(const aCol: Integer; const aValue: TVarRec; aFormat: Pointer);
+var
+  VType  : Integer;
+begin
+{$IFDEF SM }
+    with aValue do
+  case aValue.VType of
+  vtInteger:
+    WorkSheet.Cells[FO_Row + CurrentRow, FO_Column + aCol].Value := vInteger;
+  VtExtended:
+    WorkSheet.Cells[FO_Row + CurrentRow, FO_Column + aCol].Value := vExtended^;
+  vtCurrency:
+    WorkSheet.Cells[FO_Row + CurrentRow, FO_Column + aCol].Value := vCurrency^;
+  vtString:
+    WorkSheet.Cells[FO_Row + CurrentRow, FO_Column + aCol].Value := vString^;
+  vtPChar:
+    WorkSheet.Cells[FO_Row + CurrentRow, FO_Column + aCol].Value := vPChar^;
+  vtPWideChar:
+    WorkSheet.Cells[FO_Row + CurrentRow, FO_Column + aCol].Value := vPWideChar^;
+  end;
+{$ENDIF SM }
+{$IFDEF LIBXL }
+    with aValue do
+  case aValue.VType of
+  vtInteger:
+    WorkSheet.WriteNum(FO_row + CurrentRow, FO_Column + aCol, vInteger);
+  vtExtended:
+    WorkSheet.WriteNum(FO_row + CurrentRow, FO_Column + aCol, vExtended^);
+  VtCurrency:
+    WorkSheet.WriteNum(FO_row + CurrentRow, FO_Column + aCol, vCurrency^);
+  vtString:
+    WorkSheet.WriteStr(FO_row + CurrentRow, FO_Column + aCol, pChar(vString));
+  vtPChar:
+    WorkSheet.WriteStr(FO_row + CurrentRow, FO_Column + aCol, vPChar);
+  vtPWideChar:
+    WorkSheet.WriteStr(FO_row + CurrentRow, FO_Column + aCol, PChar(vPWideChar));
+  end;
+{$ENDIF LIBXL }
+{$IFDEF NXL }
+    with aValue do
+  case aValue.VType of
+  vtInteger:
+    WorkSheet.Cells[FO_Row + CurrentRow, FO_Column + aCol].Value := vInteger;
+  VtExtended:
+    WorkSheet.Cells[FO_Row + CurrentRow, FO_Column + aCol].Value := vExtended^;
+  vtCurrency:
+    WorkSheet.Cells[FO_Row + CurrentRow, FO_Column + aCol].Value := vCurrency^;
+  vtString:
+    WorkSheet.Cells[FO_Row + CurrentRow, FO_Column + aCol].Value := vString^;
+  vtPChar:
+    WorkSheet.Cells[FO_Row + CurrentRow, FO_Column + aCol].Value := vPChar^;
+  vtPWideChar:
+    WorkSheet.Cells[FO_Row + CurrentRow, FO_Column + aCol].Value := vPWideChar^;
+  end;
+{$ENDIF NXL }
+{$IFDEF LXW }
+  with aValue do
+  case aValue.VType of
+  vtInteger:
+    WorkSheet_Write_Number(worksheet, FO_row + CurrentRow, FO_Column + aCol, vInteger, nil);
+  VtExtended:
+    WorkSheet_Write_Number(worksheet, FO_row + CurrentRow, FO_Column + aCol, vExtended^, nil);
+  vtCurrency:
+    WorkSheet_Write_Number(worksheet, FO_row + CurrentRow, FO_Column + aCol, vCurrency^, nil);
+  vtString:
+    WorkSheet_Write_string(worksheet, FO_row + CurrentRow, FO_Column + aCol, pChar(vString), nil);
+  vtPChar:
+    WorkSheet_Write_string(worksheet, FO_row + CurrentRow, FO_Column + aCol, vPChar, nil);
+  vtPWideChar:
+    WorkSheet_Write_string(worksheet, FO_row + CurrentRow, FO_Column + aCol, pointer(vPWideChar), nil);
+  end;
+{$ENDIF LXW }
+end;
 
 procedure TbjXLSTable.SetFieldStr(const aField: string; const aValue: string);
 {$IFDEF SM }
@@ -694,19 +800,19 @@ begin
 {$IFDEF LIBXL }
     WorkSheet.WriteStr(FO_row + CurrentRow, FO_Column + GetFieldCol(aField), pChar(string(aValue)));
 {$ENDIF LIBXL }
-{$IFDEF NativeExcel }
+{$IFDEF NXL }
   WorkSheet.Cells[FO_row + CurrentRow, FO_Column + GetFieldCol(aField)].Value := aValue;
-{$ENDIF NativeExcel }
+{$ENDIF NXL }
 end;
 procedure TbjXLSTable.SetFieldWStr(const aField: string; const aValue: string);
 {$IFDEF SM }
 var
   ptr: pVarData;
 {$ENDIF SM }
-{$IFDEF NativeExcel }
+{$IFDEF NXL }
 var
   ptr: pVarData;
-{$ENDIF NativeExcel }
+{$ENDIF NXL }
 begin
   if FindField(AField) = nil then
   begin
@@ -718,11 +824,11 @@ begin
   ptr.VType := varOleStr;
   ptr.VOleStr := PWideChar(UTF8Decode(aValue));
 {$ENDIF SM }
-{$IFDEF NativeExcel }
+{$IFDEF NXL }
   ptr := FindVarData(WorkSheet.Cells[FO_Row + CurrentRow, FO_Column + GetFieldCol(aField)].Value);
   ptr.VType := varOleStr;
   ptr.VOleStr := PWideChar(UTF8Decode(aValue));
-{$ENDIF NativeExcel }
+{$ENDIF NXL }
 end;
 
 procedure TbjXLSTable.SetFieldNum(const aField: string; const aValue: double);
@@ -730,10 +836,10 @@ procedure TbjXLSTable.SetFieldNum(const aField: string; const aValue: double);
 var
   ptr: pVarData;
 {$ENDIF SM }
-{$IFDEF NativeExcel }
+{$IFDEF NXL }
 var
   ptr: pVarData;
-{$ENDIF NativeExcel }
+{$ENDIF NXL }
 begin
   if FindField(AField) = nil then
   begin
@@ -748,11 +854,11 @@ begin
 {$IFDEF LIBXL }
     WorkSheet.WriteNum(FO_row + CurrentRow, FO_Column + GetFieldCol(aField), aValue);
 {$ENDIF LIBXL }
-{$IFDEF NativeExcel }
+{$IFDEF NXL }
   ptr := FindVarData(WorkSheet.Cells[FO_Row + CurrentRow, FO_Column + GetFieldCol(aField)].Value);
   ptr.VType := VarDouble;
   ptr.VDouble := aValue;
-{$ENDIF NativeExcel }
+{$ENDIF NXL }
 end;
 
 procedure TbjXLSTable.AtSay(const acol: Integer; const aMsg: Variant);
@@ -782,9 +888,9 @@ begin
     WorkSheet.WriteStr(FO_row + CurrentRow, FO_Column + aCol, pChar(string(aMsg)));
   end;
 {$ENDIF LIBXL }
-{$IFDEF NativeExcel }
+{$IFDEF NXL }
   WorkSheet.Cells[FO_Row + CurrentRow, FO_Column + aCol].Value := aMsg;
-{$ENDIF NativeExcel }
+{$ENDIF NXL }
 end;
 
 procedure TbjXLSTable.Prior;
@@ -854,9 +960,9 @@ begin
 {$IFDEF LIBXL }
   WorkSheet.removeRow(FO_row + CurrentRow, FO_row + CurrentRow);
 {$ENDIF LIBXL }
-{$IFDEF NativeExcel }
+{$IFDEF NXL }
   WorkSheet.RCRange[FO_row + CurrentRow, 0, FO_row + CurrentRow, 0].EntireRow.Delete(xlShiftUp);
-{$ENDIF NativeExcel }
+{$ENDIF NXL }
 
   if IsEmpty then
   begin
@@ -883,9 +989,9 @@ begin
 {$IFDEF SM }
     WorkSheet.Rows.ClearRows(FO_row + CurrentRow, FO_row + CurrentRow);
 {$ENDIF SM }
-{$IFDEF NativeExcel }
+{$IFDEF NXL }
   WorkSheet.Selection.EntireRow.Item[FO_row + CurrentRow].Clear;
-{$ENDIF NativeExcel }
+{$ENDIF NXL }
 end;
 
 procedure TbjXLSTable.First;
@@ -948,9 +1054,9 @@ begin
 {$IFDEF SM }
   Result := WorkSheet.Cells[FO_Row, FO_Column+Idx].ValueAsString;
 {$ENDIF SM }
-{$IFDEF NativeExcel }
+{$IFDEF NXL }
   Result := WorkSheet.Cells[FO_Row, FO_Column+Idx].Value;
-{$ENDIF NativeExcel }
+{$ENDIF NXL }
 end;
 
 function TbjXLSTable.FindField(const aName: string): pChar;
@@ -964,9 +1070,11 @@ procedure TbjXLSTable.SetFields(const aList: TStrings; const ToWrite: boolean);
 var
   ctr, j: integer;
   rCellStr: string;
+  BackupList: TstringList;
 begin
   if not Assigned(aList) then
     Exit;
+  BackupList := TStringList.Create;
   FieldList.Clear;
   setLength(ColumnList, aList.Count);
   for ctr := 0 to aList.Count-1 do
@@ -979,33 +1087,23 @@ begin
 {$IFDEF LIBXL }
       WorkSheet.WriteStr(FO_Row, FO_Column + ctr, pChar(aList.Strings[ctr]));
 {$ENDIF LIBXL}
-{$IFDEF NativeExcel }
+{$IFDEF NXL }
       WorkSheet.Cells[FO_Row, FO_Column + ctr].Value := aList.Strings[ctr];
-{$ENDIF NativeExcel }
+{$ENDIF NXL }
+{$IFDEF LXW }
+    worksheet_write_string(Worksheet, FO_Row, FO_Column + ctr,
+      pUTF8Char(aList.Strings[ctr]), nil);
+{$ENDIF LXW }
   end;
+  for j := 0 to aList.Count-1 do
+    BackupList.Add(aList.Strings[j]);
   FieldList.Sorted := True;
   setLength(ColumnList, FieldList.Count);
-  for ctr := 0 to aList.Count + 29 -1 do
-  begin
-{$IFDEF SM }
-    rCellStr := WorkSheet.Cells[FO_Row, FO_Column+ctr].ValueAsString;
-{$ENDIF SM }
-{$IFDEF LIBXL }
-    rCellStr := WorkSheet.readStr(FO_Row, FO_Column+ctr);
-{$ENDIF LIBXL}
-{$IFDEF NativeExcel }
-    rCellStr := WorkSheet.Cells[FO_Row, FO_Column+ctr].Value;
-{$ENDIF NativeExcel }
-    if Length(rCellStr) = 0 then
-      Break;
+  for Ctr := 0 to BackupList.Count-1 do
     for j := 0 to FieldList.Count-1 do
-    if PackStr(RCellStr) =
-      PackStr(FieldList.Strings[j]) then
-    begin
+   if PackStr(BackupList.Strings[Ctr]) = FieldList.Strings[j] then
         ColumnList[j] := ctr;
-        break;
-    end;
-  end;
+  BackupList.Free;
   CurrentRow := 1;
   CurrentColumn := 0;
 end;
@@ -1052,12 +1150,11 @@ end;
 Function TbjXLSTable.GetFields(const aList: TStrings): TStrings;
 var
   ctr, j: integer;
-{$IFDEF SM }
   rCellStr: String;
-{$ENDIF SM }
-{$IFDEF NativeExcel }
-  rCellStr: WideString;
-{$ENDIF NativeExcel }
+{.$ENDIF SM }
+{.$IFDEF NXL }
+//  rCellStr: WideString;
+{.$ENDIF NXL }
 begin
   FieldList.Clear;
 {$IFDEF SM }
@@ -1107,21 +1204,22 @@ begin
 {$IFDEF LIBXL }
   for ctr := 0 to aList.Count + 29 -1 do
   begin
-    if Length(WorkSheet.readStr(FO_Row, FO_Column+ctr)) = 0 then
+    rCellStr := WorkSheet.readStr(FO_Row, FO_Column+ctr, wStrFormat);
+    if Length(rCellStr) = 0 then
       Break;
-    if Pos('Dr_', WorkSheet.readStr(FO_Row, FO_Column+ctr)) > 0 then
+    if Pos('Dr_', rCellStr) > 0 then
     begin
-      FieldList.Add(WorkSheet.readStr(FO_Row, FO_Column+ctr));
+      FieldList.Add(rCellStr);
       Continue;
     end;
-    if Pos('Cr_', WorkSheet.readStr(FO_Row, FO_Column+ctr)) > 0 then
+    if Pos('Cr_', rCellStr) > 0 then
     begin
-      FieldList.Add(WorkSheet.readStr(FO_Row, FO_Column+ctr));
+      FieldList.Add(rCellStr);
       Continue;
     end;
     for j := 0 to aList.Count-1 do
     begin
-      if PackStr(WorkSheet.readStr(FO_Row, FO_Column+ctr)) =
+      if PackStr(rCellStr) =
         PackStr(aList.Strings[j]) then
       begin
         FieldList.Add(PackStr(aList.Strings[j]));
@@ -1133,11 +1231,12 @@ begin
   setLength(ColumnList, FieldList.Count);
   for ctr := 0 to aList.Count + 29 -1 do
   begin
-    if Length(WorkSheet.readStr(FO_Row, FO_Column+ctr)) = 0 then
+    rCellStr := WorkSheet.readStr(FO_Row, FO_Column+ctr, wStrFormat);
+    if Length(rCellStr) = 0 then
       Break;
     for j := 0 to FieldList.Count-1 do
     begin
-      if PackStr(WorkSheet.readStr(FO_Row, FO_Column+ctr)) =
+      if PackStr(rCellStr) =
         FieldList.Strings[j] then
     begin
         ColumnList[j] := ctr;
@@ -1146,7 +1245,7 @@ begin
     end;
   end;
 {$ENDIF LIBXL }
-{$IFDEF NativeExcel }
+{$IFDEF NXL }
   for ctr := 0 to aList.Count + 29-1 do
   begin
     rCellStr := VarToWideStr(WorkSheet.Cells[FO_Row, FO_Column+ctr].Value);
@@ -1189,7 +1288,7 @@ begin
       end;
     end;
   end;
-{$ENDIF NativeExcel }
+{$ENDIF NXL }
   Result := FieldList;
   if IDList.Count > 0 then
   begin
