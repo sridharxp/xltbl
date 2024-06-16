@@ -265,6 +265,8 @@ begin
   FOwner := True;
   WorkBook := workbook_new(pUTF8Char(aName));
 {$ENDIF LXW }
+  if not Assigned(Workbook) then
+    raise Exception.Create('File ' + aName + ' not found');
 end;
 
 {
@@ -953,7 +955,14 @@ end;
 procedure TbjXLSTable.Delete;
 var
   wTempRow: integer;
+  rHasTail: Boolean;
 begin
+  rHasTail := True;
+  if IsEmpty(CurrentRow + 1) then
+    begin
+    rHasTail := False;
+    EOF := True;
+  end;
 {$IFDEF SM }
   WorkSheet.Rows.DeleteRows(FO_row + CurrentRow, FO_row + CurrentRow);
 {$ENDIF SM }
@@ -963,14 +972,26 @@ begin
 {$IFDEF NXL }
   WorkSheet.RCRange[FO_row + CurrentRow, 0, FO_row + CurrentRow, 0].EntireRow.Delete(xlShiftUp);
 {$ENDIF NXL }
-
-  if IsEmpty then
+   if rHasTail then
+   begin
+     BOF := False;
+     if IsEmpty(CurrentRow + 1) then
+       EOF := True;
+     Exit;
+   end
+   else
   begin
+     CurrentRow := CurrentRow - 1;
     if CurrentRow = 1 then
       BOF := True;
+   end;
+  if IsEmpty then
+  begin
     wTempRow := CurrentRow;
     while wTempRow < LastRow do
     begin
+    if wTempRow-CurrentRow = SkipCount then
+      break;
       if not IsEmpty(wTempRow+1) then
       begin
         CurrentRow := wTempRow+1;
